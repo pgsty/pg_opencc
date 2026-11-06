@@ -161,11 +161,11 @@ BEGIN ATOMIC
       FROM pg_depend d
       JOIN pg_proc p ON p.oid = d.refobjid
      WHERE d.refclassid = 'pg_proc'::regclass
-       AND d.deptype = 'n'
+       AND d.deptype IN ('n', 'a')
        AND p.pronamespace = (SELECT e.extnamespace FROM pg_extension e WHERE e.extname = 'opencc')
   ), col AS (
-    -- a generated column's expression depends on the attrdef (PostgreSQL 15+)
-    -- or on the column itself (PostgreSQL 14)
+    -- a generated column's expression depends on its attrdef (PostgreSQL 15+,
+    -- deptype 'n') or on the column itself (PostgreSQL 14, deptype 'a')
     SELECT dep.*,
            CASE
              WHEN dep.classid = 'pg_attrdef'::regclass THEN
