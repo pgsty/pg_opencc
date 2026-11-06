@@ -27,5 +27,5 @@ jobs:
           - { image: 'ubuntu:24.04', pg: 17 }
           - { image: 'ubuntu:24.04', pg: 18 }
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - run: bash ci/test.sh ${{ matrix.pg }}

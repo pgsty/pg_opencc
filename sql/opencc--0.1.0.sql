@@ -163,42 +163,39 @@ BEGIN ATOMIC
      WHERE d.refclassid = 'pg_proc'::regclass
        AND d.deptype = 'n'
        AND p.pronamespace = (SELECT e.extnamespace FROM pg_extension e WHERE e.extname = 'opencc')
-  ), obj AS (
-    SELECT dep.*, c.relkind, c.relnamespace,
-           CASE
-             WHEN dep.classid = 'pg_attrdef'::regclass THEN
-               (SELECT a.attgenerated FROM pg_attrdef ad
-                  JOIN pg_attribute a ON a.attrelid = ad.adrelid AND a.attnum = ad.adnum
-                 WHERE ad.oid = dep.objid)::text
-           END AS generated,
-           CASE
-             WHEN dep.classid = 'pg_attrdef'::regclass THEN
-               (SELECT a.attname FROM pg_attrdef ad
-                  JOIN pg_attribute a ON a.attrelid = ad.adrelid AND a.attnum = ad.adnum
-                 WHERE ad.oid = dep.objid)::text
-           END AS colname,
+  ), col AS (
+    -- a generated column's expression depends on the attrdef (PostgreSQL 15+)
+    -- or on the column itself (PostgreSQL 14)
+    SELECT dep.*,
            CASE
              WHEN dep.classid = 'pg_attrdef'::regclass THEN
                (SELECT ad.adnum FROM pg_attrdef ad WHERE ad.oid = dep.objid)::integer
+             WHEN dep.classid = 'pg_class'::regclass THEN dep.objsubid
              ELSE 0
            END AS colnum
-      FROM dep JOIN pg_class c ON c.oid = dep.rel
+      FROM dep
+  ), obj AS (
+    SELECT col.*, c.relkind, c.relnamespace, a.attname::text AS colname,
+           coalesce(a.attgenerated = 's', false) AS generated
+      FROM col
+      JOIN pg_class c ON c.oid = col.rel
+      LEFT JOIN pg_attribute a ON a.attrelid = col.rel AND a.attnum = col.colnum AND col.colnum > 0
   )
   SELECT DISTINCT
          CASE
-           WHEN obj.classid = 'pg_attrdef'::regclass    THEN 'generated column'
+           WHEN obj.generated                           THEN 'generated column'
            WHEN obj.classid = 'pg_constraint'::regclass THEN 'constraint'
            WHEN obj.relkind = 'm'                       THEN 'materialized view'
            ELSE 'index'
          END,
          CASE
-           WHEN obj.classid IN ('pg_attrdef'::regclass, 'pg_rewrite'::regclass) THEN
+           WHEN obj.generated OR obj.classid = 'pg_rewrite'::regclass THEN
              pg_describe_object('pg_class'::regclass, obj.rel, obj.colnum)
            ELSE pg_describe_object(obj.classid, obj.objid, obj.objsubid)
          END,
          obj.refobjid::regprocedure::text,
          CASE
-           WHEN obj.classid = 'pg_attrdef'::regclass THEN
+           WHEN obj.generated THEN
              format('UPDATE %s SET %I = DEFAULT', obj.rel::regclass, obj.colname)
            WHEN obj.classid = 'pg_constraint'::regclass THEN
              (SELECT format('ALTER TABLE %s DROP CONSTRAINT %I, ADD CONSTRAINT %I %s NOT VALID; '
@@ -211,9 +208,9 @@ BEGIN ATOMIC
          END
     FROM obj
    WHERE obj.relnamespace <> (SELECT e.extnamespace FROM pg_extension e WHERE e.extname = 'opencc')
-     AND (obj.classid = 'pg_constraint'::regclass
-          OR (obj.classid = 'pg_attrdef'::regclass AND obj.generated = 's')
-          OR (obj.classid = 'pg_class'::regclass AND obj.relkind IN ('i', 'I'))
+     AND (obj.generated
+          OR obj.classid = 'pg_constraint'::regclass
+          OR (obj.classid = 'pg_class'::regclass AND obj.objsubid = 0 AND obj.relkind IN ('i', 'I'))
           OR (obj.classid = 'pg_rewrite'::regclass AND obj.relkind = 'm'))
    ORDER BY 1, 2, 3;
 END;

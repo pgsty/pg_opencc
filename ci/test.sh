@@ -17,7 +17,7 @@ if command -v apt-get >/dev/null 2>&1; then
 	echo 'create_main_cluster = false' >> /etc/postgresql-common/createcluster.conf
 	/usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y >/dev/null
 	apt-get install -y -qq --no-install-recommends "postgresql-$PG" "postgresql-server-dev-$PG" \
-		cmake g++ make python3 >/dev/null
+		cmake g++ make python3 diffutils >/dev/null
 	PGBIN=/usr/lib/postgresql/$PG/bin
 else
 	EL=${VERSION_ID%%.*}
@@ -25,7 +25,7 @@ else
 	if [ "$EL" = 8 ]; then dnf config-manager --set-enabled powertools; else dnf config-manager --set-enabled crb; fi
 	dnf install -y -q "https://download.postgresql.org/pub/repos/yum/reporpms/EL-$EL-$(uname -m)/pgdg-redhat-repo-latest.noarch.rpm"
 	if [ "$EL" -lt 10 ]; then dnf -qy module disable postgresql; fi
-	dnf install -y -q "postgresql$PG-server" "postgresql$PG-devel" cmake gcc-c++ make python3 redhat-rpm-config
+	dnf install -y -q "postgresql$PG-server" "postgresql$PG-devel" cmake gcc-c++ make python3 redhat-rpm-config diffutils
 	PGBIN=/usr/pgsql-$PG/bin
 fi
 
