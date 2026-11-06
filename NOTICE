@@ -1,0 +1,27 @@
+pg_opencc
+Copyright 2026 Ruohang Feng and PGSTY contributors
+
+Licensed under the Apache License, Version 2.0 (see LICENSE).
+
+This product bundles third-party software in vendor/opencc, compiled into the
+opencc shared library:
+
+  OpenCC 1.4.2 (Open Chinese Convert), including its dictionaries
+    Copyright 2010-2026 Carbo Kuo and contributors
+    Apache License 2.0 -- vendor/opencc/LICENSE
+    https://github.com/BYVoid/OpenCC
+
+  marisa-trie 0.3.1
+    Copyright (c) 2010-2025, Susumu Yata
+    BSD-2-Clause (or LGPL-2.1-or-later) -- vendor/opencc/deps/marisa-0.3.1/COPYING.md
+
+  darts-clone 0.32h
+    Copyright (c) 2008-2014, Susumu Yata
+    BSD-2-Clause -- vendor/opencc/deps/darts-clone-0.32h/COPYING.md
+
+  RapidJSON 1.1.0
+    Copyright (C) 2015 THL A29 Limited, a Tencent company, and Milo Yip
+    MIT License -- vendor/opencc/deps/rapidjson-1.1.0/rapidjson/rapidjson.h
+
+TCLAP 1.2.5 (MIT) is present in vendor/opencc/deps because OpenCC's
+dictionary compiler uses it at build time; it is not linked into the extension.

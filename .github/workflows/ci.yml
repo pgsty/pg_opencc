@@ -1,0 +1,31 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: ${{ matrix.image }} / PG ${{ matrix.pg }}
+    runs-on: ubuntu-24.04
+    container: ${{ matrix.image }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { image: 'rockylinux/rockylinux:8', pg: 18 }
+          - { image: 'rockylinux/rockylinux:9', pg: 18 }
+          - { image: 'rockylinux/rockylinux:10', pg: 18 }
+          - { image: 'debian:12', pg: 18 }
+          - { image: 'debian:13', pg: 18 }
+          - { image: 'ubuntu:22.04', pg: 18 }
+          - { image: 'ubuntu:24.04', pg: 14 }
+          - { image: 'ubuntu:24.04', pg: 15 }
+          - { image: 'ubuntu:24.04', pg: 16 }
+          - { image: 'ubuntu:24.04', pg: 17 }
+          - { image: 'ubuntu:24.04', pg: 18 }
+    steps:
+      - uses: actions/checkout@v4
+      - run: bash ci/test.sh ${{ matrix.pg }}

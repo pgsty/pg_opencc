@@ -1,0 +1,75 @@
+-- one-to-many spans and their candidates
+SELECT * FROM opencc.ambiguities('大战文丑的时候，他的头发很干燥', 's2t');
+ pos | len | source | output | candidates  
+-----+-----+--------+--------+-------------
+   3 |   2 | 文丑   | 文丑   | {文丑,文醜}
+(1 row)
+
+-- phrases settle one-to-many characters, so nothing is reported here
+SELECT * FROM opencc.ambiguities('台风过后，我在里屋发现一张旧钟表', 's2t');
+ pos | len | source | output | candidates 
+-----+-----+--------+--------+------------
+(0 rows)
+
+SELECT count(*) AS none FROM opencc.ambiguities('PostgreSQL', 's2t');
+ none 
+------
+    0
+(1 row)
+
+-- candidates: default first, empty when no dictionary has the word
+SELECT opencc.candidates('里', 's2t')        AS s2t,
+       opencc.candidates('里', 's2tw')       AS s2tw,
+       opencc.candidates('文丑', 's2t')      AS phrase,
+       opencc.candidates('PostgreSQL', 's2t') AS missing;
+    s2t     |    s2tw    |   phrase    | missing 
+------------+------------+-------------+---------
+ {裏,里,哩} | {裡,里,哩} | {文丑,文醜} | {}
+(1 row)
+
+-- explain: segments and the result after each conversion stage
+SELECT * FROM opencc.explain('他只看了几行日志，就一叶知秋，猜到整个系统是数据库连接池出了问题', 's2twp');
+ seq |  source  |        steps        |  output  
+-----+----------+---------------------+----------
+   1 | 他       | {他,他}             | 他
+   2 | 只看     | {只看,只看}         | 只看
+   3 | 了几行   | {了幾行,了幾行}     | 了幾行
+   4 | 日志     | {日誌,日誌}         | 日誌
+   5 | ，就     | {，就,，就}         | ，就
+   6 | 一叶知秋 | {一葉知秋,一葉知秋} | 一葉知秋
+   7 | ，猜到   | {，猜到,，猜到}     | ，猜到
+   8 | 整个     | {整個,整個}         | 整個
+   9 | 系统     | {系統,系統}         | 系統
+  10 | 是       | {是,是}             | 是
+  11 | 数据库   | {數據庫,資料庫}     | 資料庫
+  12 | 连接池   | {連接池,連線池}     | 連線池
+  13 | 出了     | {出了,出了}         | 出了
+  14 | 问题     | {問題,問題}         | 問題
+(14 rows)
+
+SELECT * FROM opencc.explain('汉字', 's2t');
+ seq | source | steps  | output 
+-----+--------+--------+--------
+   1 | 汉字   | {漢字} | 漢字
+(1 row)
+
+SELECT count(*) AS rows FROM opencc.explain('', 's2twp');
+ rows 
+------
+    0
+(1 row)
+
+-- explain output concatenates to the conversion result
+SELECT string_agg(output, '' ORDER BY seq) = opencc.s2twp(x) AS consistent
+  FROM (VALUES ('我们在老挝的服务器的硬盘需要使用互联网算法软件解决异步的问题。')) v(x),
+       LATERAL opencc.explain(x, 's2twp')
+ GROUP BY x;
+ consistent 
+------------
+ t
+(1 row)
+
+SELECT * FROM opencc.ambiguities('汉字', 'nope');
+ERROR:  unknown OpenCC config "nope"
+DETAIL:  Built-in configs: s2t, t2s, s2tw, tw2s, s2hk, hk2s, s2twp, tw2sp, s2hkp, hk2sp, t2tw, tw2t, t2hk, hk2t, t2jp, jp2t.
+HINT:  SELECT * FROM opencc.configs lists them.

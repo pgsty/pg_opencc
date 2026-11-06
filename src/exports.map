@@ -1,0 +1,9 @@
+{
+  global:
+    Pg_magic_func;
+    _PG_init;
+    pg_finfo_opencc_*;
+    opencc_*;
+  local:
+    *;
+};

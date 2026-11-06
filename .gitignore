@@ -1,0 +1,13 @@
+/build/
+*.o
+*.bc
+*.so
+*.dylib
+/results/
+/regression.*
+/log/
+/tmp_check/
+*.tar.gz
+*.zip
+.DS_Store
+*.log

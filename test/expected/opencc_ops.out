@@ -1,0 +1,81 @@
+-- versions: the dictionary digest identifies the embedded data
+SELECT extension, opencc, dictionary ~ '^sha256:[0-9a-f]{64}$' AS digest_ok FROM opencc.version();
+ extension | opencc | digest_ok 
+-----------+--------+-----------
+ 0.1.0     | 1.4.2  | t
+(1 row)
+
+-- configs are loaded on first use, once per backend
+SELECT count(*) AS loaded FROM opencc.configs WHERE loaded;
+ loaded 
+--------
+      0
+(1 row)
+
+SELECT opencc.t2s('漢字');
+ t2s  
+------
+ 汉字
+(1 row)
+
+SELECT name FROM opencc.configs WHERE loaded;
+ name 
+------
+ t2s
+(1 row)
+
+-- objects that store results derived from opencc, and how to rebuild them
+CREATE SCHEMA app;
+CREATE TABLE app.post (id int PRIMARY KEY, body text NOT NULL,
+  body_tw text GENERATED ALWAYS AS (opencc.localize(body, 'zh-TW')) STORED,
+  CONSTRAINT body_simplified CHECK (opencc.detect(body) <> 'traditional'));
+CREATE INDEX post_fold_idx ON app.post (opencc.t2s(body));
+CREATE MATERIALIZED VIEW app.post_hk AS SELECT id, opencc.s2hk(body) AS body FROM app.post;
+CREATE VIEW app.post_v AS SELECT id, opencc.s2t(body) AS body FROM app.post;
+SELECT kind, object, uses FROM opencc.dependents();
+       kind        |                    object                    |              uses               
+-------------------+----------------------------------------------+---------------------------------
+ constraint        | constraint body_simplified on table app.post | opencc.detect(text)
+ generated column  | column body_tw of table app.post             | opencc.localize(text,text,text)
+ index             | index app.post_fold_idx                      | opencc.t2s(text)
+ materialized view | materialized view app.post_hk                | opencc.s2hk(text)
+(4 rows)
+
+SELECT action FROM opencc.dependents();
+                                                                                                    action                                                                                                     
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ ALTER TABLE app.post DROP CONSTRAINT body_simplified, ADD CONSTRAINT body_simplified CHECK ((opencc.detect(body) <> 'traditional'::text)) NOT VALID; ALTER TABLE app.post VALIDATE CONSTRAINT body_simplified
+ UPDATE app.post SET body_tw = DEFAULT
+ REINDEX INDEX CONCURRENTLY app.post_fold_idx
+ REFRESH MATERIALIZED VIEW app.post_hk
+(4 rows)
+
+-- the suggested statements run
+UPDATE app.post SET body_tw = DEFAULT;
+REINDEX INDEX CONCURRENTLY app.post_fold_idx;
+REFRESH MATERIALIZED VIEW app.post_hk;
+ALTER TABLE app.post DROP CONSTRAINT body_simplified,
+  ADD CONSTRAINT body_simplified CHECK ((opencc.detect(body) <> 'traditional'::text)) NOT VALID;
+ALTER TABLE app.post VALIDATE CONSTRAINT body_simplified;
+DROP SCHEMA app CASCADE;
+NOTICE:  drop cascades to 3 other objects
+DETAIL:  drop cascades to table app.post
+drop cascades to materialized view app.post_hk
+drop cascades to view app.post_v
+SELECT count(*) AS left_over FROM opencc.dependents();
+ left_over 
+-----------
+         0
+(1 row)
+
+-- non-superusers can use the extension
+CREATE ROLE regress_opencc_reader;
+SET ROLE regress_opencc_reader;
+SELECT opencc.s2t('汉字'), (SELECT count(*) FROM opencc.configs) AS configs, (SELECT count(*) FROM opencc.routes) AS routes;
+ s2t  | configs | routes 
+------+---------+--------
+ 漢字 |      16 |     36
+(1 row)
+
+RESET ROLE;
+DROP ROLE regress_opencc_reader;

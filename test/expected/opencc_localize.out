@@ -1,0 +1,112 @@
+-- region routes
+SELECT * FROM opencc.routes ORDER BY source, target;
+ source  | target  |    chain    |   maturity   
+---------+---------+-------------+--------------
+ ja      | ja      | {}          | stable
+ ja      | zh-CN   | {jp2t,t2s}  | experimental
+ ja      | zh-HK   | {jp2t,t2hk} | experimental
+ ja      | zh-Hans | {jp2t,t2s}  | experimental
+ ja      | zh-Hant | {jp2t}      | experimental
+ ja      | zh-TW   | {jp2t,t2tw} | experimental
+ zh-CN   | ja      | {s2t,t2jp}  | experimental
+ zh-CN   | zh-CN   | {}          | stable
+ zh-CN   | zh-HK   | {s2hkp}     | developing
+ zh-CN   | zh-Hans | {}          | stable
+ zh-CN   | zh-Hant | {s2t}       | stable
+ zh-CN   | zh-TW   | {s2twp}     | stable
+ zh-HK   | ja      | {hk2t,t2jp} | experimental
+ zh-HK   | zh-CN   | {hk2sp}     | developing
+ zh-HK   | zh-HK   | {}          | stable
+ zh-HK   | zh-Hans | {hk2s}      | stable
+ zh-HK   | zh-Hant | {hk2t}      | stable
+ zh-HK   | zh-TW   | {hk2t,t2tw} | stable
+ zh-Hans | ja      | {s2t,t2jp}  | experimental
+ zh-Hans | zh-CN   | {}          | stable
+ zh-Hans | zh-HK   | {s2hkp}     | developing
+ zh-Hans | zh-Hans | {}          | stable
+ zh-Hans | zh-Hant | {s2t}       | stable
+ zh-Hans | zh-TW   | {s2twp}     | stable
+ zh-Hant | ja      | {t2jp}      | experimental
+ zh-Hant | zh-CN   | {t2s}       | stable
+ zh-Hant | zh-HK   | {t2hk}      | stable
+ zh-Hant | zh-Hans | {t2s}       | stable
+ zh-Hant | zh-Hant | {}          | stable
+ zh-Hant | zh-TW   | {t2tw}      | stable
+ zh-TW   | ja      | {tw2t,t2jp} | experimental
+ zh-TW   | zh-CN   | {tw2sp}     | stable
+ zh-TW   | zh-HK   | {tw2t,t2hk} | stable
+ zh-TW   | zh-Hans | {tw2s}      | stable
+ zh-TW   | zh-Hant | {tw2t}      | stable
+ zh-TW   | zh-TW   | {}          | stable
+(36 rows)
+
+-- one source, every region
+SELECT r AS target, opencc.localize('克里斯托弗·诺兰的电影，安装内存条', r, 'zh-CN') AS output
+  FROM unnest(ARRAY['zh-Hans', 'zh-Hant', 'zh-CN', 'zh-TW', 'zh-HK']) r;
+ target  |                output                 
+---------+---------------------------------------
+ zh-Hans | 克里斯托弗·诺兰的电影，安装内存条
+ zh-Hant | 克里斯托弗·諾蘭的電影，安裝內存條
+ zh-CN   | 克里斯托弗·诺兰的电影，安装内存条
+ zh-TW   | 克里斯多福·諾蘭的電影，安裝記憶體模組
+ zh-HK   | 基斯杜化·路蘭的電影，安裝記憶體模組
+(5 rows)
+
+-- region tags are case-insensitive and accept "_" for "-"
+SELECT opencc.localize('诺兰的电影', 'zh-tw') = opencc.localize('诺兰的电影', 'ZH_TW') AS same;
+ same 
+------
+ t
+(1 row)
+
+-- naming the source region converts vocabulary; auto only detects the script
+SELECT opencc.localize('滑鼠裡面的矽二極體壞了', 'zh-CN', source => 'zh-TW') AS from_tw,
+       opencc.localize('滑鼠裡面的矽二極體壞了', 'zh-CN')                    AS from_auto;
+        from_tw         |       from_auto        
+------------------------+------------------------
+ 鼠标里面的硅二极管坏了 | 滑鼠里面的矽二极体坏了
+(1 row)
+
+SELECT opencc.localize('鼠标', 'zh-TW') AS simplified_in, opencc.localize('滑鼠', 'zh-TW') AS tw_in;
+ simplified_in | tw_in 
+---------------+-------
+ 滑鼠          | 滑鼠
+(1 row)
+
+SELECT opencc.localize('旧字体の歴史', 'zh-Hant') AS japanese_in;
+ japanese_in  
+--------------
+ 舊字體の歷史
+(1 row)
+
+-- errors
+SELECT opencc.localize('诺兰', 'zh-SG');
+ERROR:  unsupported target region "zh-SG"
+HINT:  Supported regions: zh-Hans, zh-Hant, zh-CN, zh-TW, zh-HK, ja.
+SELECT opencc.localize('诺兰', 'zh-TW', 'en');
+ERROR:  unsupported source region "en"
+HINT:  Supported regions: zh-Hans, zh-Hant, zh-CN, zh-TW, zh-HK, ja, or auto.
+-- script detection
+SELECT x AS input, opencc.detect(x), s.*
+  FROM (VALUES ('为什么你在床里面睡着？'), ('為什麼你在床裡面睡著？'), ('抬头 擡头 抬頭 擡頭'),
+               ('旧字体の歴史'), ('PostgreSQL 18'), ('中文'), ('')) v(x),
+       LATERAL opencc.script_stats(x) s;
+         input          |   detect    | han | simplified | traditional | kana 
+------------------------+-------------+-----+------------+-------------+------
+ 为什么你在床里面睡着？ | simplified  |  10 |          1 |           0 |    0
+ 為什麼你在床裡面睡著？ | traditional |  10 |          0 |           3 |    0
+ 抬头 擡头 抬頭 擡頭    | mixed       |   8 |          2 |           4 |    0
+ 旧字体の歴史           | japanese    |   5 |          2 |           0 |    1
+ PostgreSQL 18          | none        |   0 |          0 |           0 |    0
+ 中文                   | neutral     |   2 |          0 |           0 |    0
+                        | none        |   0 |          0 |           0 |    0
+(7 rows)
+
+-- detect() in a CHECK constraint
+CREATE TABLE article (id int PRIMARY KEY, body text NOT NULL
+  CONSTRAINT body_is_simplified CHECK (opencc.detect(body) IN ('simplified', 'neutral', 'none')));
+INSERT INTO article VALUES (1, '为什么你在床里面睡着？');
+INSERT INTO article VALUES (2, '為什麼你在床裡面睡著？');
+ERROR:  new row for relation "article" violates check constraint "body_is_simplified"
+DETAIL:  Failing row contains (2, 為什麼你在床裡面睡著？).
+DROP TABLE article;

@@ -1,0 +1,6 @@
+comment = 'OpenCC conversion among Simplified, Traditional, Taiwan, Hong Kong Chinese and Japanese Kanji'
+default_version = '0.1.0'
+module_pathname = '$libdir/opencc'
+relocatable = false
+schema = 'opencc'
+trusted = true
